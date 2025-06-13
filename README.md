@@ -1,6 +1,6 @@
 # RISC Zero + Real FHE Voting System
 
-**🎉 BREAKTHROUGH: First Working Implementation of Real Fully Homomorphic Encryption (FHE) Inside a Zero-Knowledge Virtual Machine (zkVM)**
+**Working Implementation of Real Fully Homomorphic Encryption (FHE) Inside a Zero-Knowledge Virtual Machine (zkVM)**
 
 This project demonstrates a groundbreaking solution to the trust problem in privacy-preserving voting systems by combining **real FHE operations** with **cryptographic proofs of computation correctness**.
 
