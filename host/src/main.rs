@@ -87,13 +87,17 @@ fn create_test_votes() -> VoteTallyInput {
         ("grace", VoteOption::Option2),
     ];
     
+    // Initialize FHE client for real encryption
+    let fhe_client = FheClient::new();
+    
     let encrypted_votes = voter_data.into_iter().map(|(name, option)| {
         let voter_address = generate_eth_address(name);
         let signature = create_signature(&voter_address, &option);
         
-        // PRIVACY FIX: Rick Weber @ Sunscreen.tech feedback
-        // Create encrypted vote vector: [encrypt(1|0), encrypt(1|0), encrypt(1|0)]
-        let encrypted_vote_vector = create_encrypted_vote_vector(option, &voter_address);
+        // REAL FHE ENCRYPTION: No simulation!
+        // Each client encrypts their vote vector with real FHE
+        println!("🗳️ [Host] {} is encrypting their vote with real FHE...", name);
+        let encrypted_vote_vector = fhe_client.encrypt_vote_vector(option);
         
         EncryptedVote {
             voter_address,
@@ -123,34 +127,7 @@ fn create_signature(voter_address: &str, vote_option: &VoteOption) -> String {
     hex::encode(result)
 }
 
-fn create_encrypted_vote_vector(vote_option: VoteOption, voter_address: &str) -> Vec<Vec<u8>> {
-    // PRIVACY FIX: Rick Weber @ Sunscreen.tech feedback
-    // Create vector where only the chosen option gets "1", others get "0"
-    // In production, these would be real FHE encryptions of 1 and 0
-    
-    let mut vote_vector = Vec::new();
-    
-    // For each candidate option, encrypt 1 if chosen, 0 if not
-    for candidate in [VoteOption::Option1, VoteOption::Option2, VoteOption::Option3] {
-        let vote_value = if candidate == vote_option { 1u8 } else { 0u8 };
-        let encrypted_value = simulate_fhe_encryption(vote_value, voter_address, candidate as u8);
-        vote_vector.push(encrypted_value);
-    }
-    
-    vote_vector
-}
-
-fn simulate_fhe_encryption(value: u8, voter_address: &str, candidate_index: u8) -> Vec<u8> {
-    // Simulate FHE encryption of individual values
-    // In production, this would be real FHE encryption: encrypt(value)
-    let mut hasher = Keccak256::new();
-    hasher.update(voter_address.as_bytes());
-    hasher.update(&[value]);
-    hasher.update(&[candidate_index]);
-    hasher.update(b"fhe_encrypted_value");
-    let result = hasher.finalize();
-    result.to_vec()
-}
+// Note: Removed simulation functions - now using real FHE encryption via FheClient
 
 fn verify_results(input: &VoteTallyInput, output: &VoteTallyOutput) -> Result<(), String> {
     println!("\n🔍 [Host] Verifying computation results...");
