@@ -25,9 +25,13 @@ pub struct VoteTallyInput {
 #[derive(Serialize, Deserialize)]
 pub struct EncryptedVote {
     pub voter_address: String,
-    pub vote_option: VoteOption, // In real implementation, this would be hidden
-    pub encrypted_data: Vec<u8>, // Simulated encrypted vote data
+    // PRIVACY FIX: Rick Weber @ Sunscreen.tech feedback
+    // Instead of revealing vote choice, encrypt full vote vector
+    pub encrypted_vote_vector: Vec<Vec<u8>>, // [encrypt(1|0), encrypt(1|0), encrypt(1|0)] for each candidate
     pub signature: String, // Voter signature for authentication
+    
+    // Keep for demo purposes to verify correctness, but this would be removed in production
+    pub actual_choice: VoteOption, // Only for verification - NOT sent in real system
 }
 
 #[derive(Serialize, Deserialize)]

@@ -3,7 +3,10 @@ use risc0_zkvm::{default_prover, ExecutorEnv};
 use sha3::{Digest, Keccak256};
 
 mod types;
+mod fhe_client;
+
 use types::{VoteTallyInput, VoteTallyOutput, EncryptedVote, VoteOption};
+use fhe_client::FheClient;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 RISC Zero + FHE Voting Proof of Concept");
@@ -18,9 +21,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("📝 [Host] Creating test voting data...");
     let vote_input = create_test_votes();
     
-    println!("📊 [Host] Processing {} encrypted votes:", vote_input.encrypted_votes.len());
+    println!("📊 [Host] Processing {} encrypted vote vectors:", vote_input.encrypted_votes.len());
     for vote in &vote_input.encrypted_votes {
-        println!("  {} -> {} (encrypted)", vote.voter_address, vote.vote_option.description());
+        println!("  {} -> PRIVATE (encrypted vote vector sent)", vote.voter_address);
+        println!("    [Verification only - actual choice: {}]", vote.actual_choice.description());
     }
     
     // Create executor environment with vote data
@@ -86,13 +90,16 @@ fn create_test_votes() -> VoteTallyInput {
     let encrypted_votes = voter_data.into_iter().map(|(name, option)| {
         let voter_address = generate_eth_address(name);
         let signature = create_signature(&voter_address, &option);
-        let encrypted_data = simulate_encryption(&option, &voter_address);
+        
+        // PRIVACY FIX: Rick Weber @ Sunscreen.tech feedback
+        // Create encrypted vote vector: [encrypt(1|0), encrypt(1|0), encrypt(1|0)]
+        let encrypted_vote_vector = create_encrypted_vote_vector(option, &voter_address);
         
         EncryptedVote {
             voter_address,
-            vote_option: option,
-            encrypted_data,
+            encrypted_vote_vector,
             signature,
+            actual_choice: option, // Only for demo verification - removed in production
         }
     }).collect();
     
@@ -116,12 +123,31 @@ fn create_signature(voter_address: &str, vote_option: &VoteOption) -> String {
     hex::encode(result)
 }
 
-fn simulate_encryption(vote_option: &VoteOption, voter_address: &str) -> Vec<u8> {
-    // Simulate FHE encryption (in real implementation, use actual FHE)
+fn create_encrypted_vote_vector(vote_option: VoteOption, voter_address: &str) -> Vec<Vec<u8>> {
+    // PRIVACY FIX: Rick Weber @ Sunscreen.tech feedback
+    // Create vector where only the chosen option gets "1", others get "0"
+    // In production, these would be real FHE encryptions of 1 and 0
+    
+    let mut vote_vector = Vec::new();
+    
+    // For each candidate option, encrypt 1 if chosen, 0 if not
+    for candidate in [VoteOption::Option1, VoteOption::Option2, VoteOption::Option3] {
+        let vote_value = if candidate == vote_option { 1u8 } else { 0u8 };
+        let encrypted_value = simulate_fhe_encryption(vote_value, voter_address, candidate as u8);
+        vote_vector.push(encrypted_value);
+    }
+    
+    vote_vector
+}
+
+fn simulate_fhe_encryption(value: u8, voter_address: &str, candidate_index: u8) -> Vec<u8> {
+    // Simulate FHE encryption of individual values
+    // In production, this would be real FHE encryption: encrypt(value)
     let mut hasher = Keccak256::new();
     hasher.update(voter_address.as_bytes());
-    hasher.update(&[*vote_option as u8]);
-    hasher.update(b"encrypted_vote");
+    hasher.update(&[value]);
+    hasher.update(&[candidate_index]);
+    hasher.update(b"fhe_encrypted_value");
     let result = hasher.finalize();
     result.to_vec()
 }
@@ -135,7 +161,8 @@ fn verify_results(input: &VoteTallyInput, output: &VoteTallyOutput) -> Result<()
     let mut option3_count = 0;
     
     for vote in &input.encrypted_votes {
-        match vote.vote_option {
+        // Use actual_choice for verification (in production this wouldn't exist)
+        match vote.actual_choice {
             VoteOption::Option1 => option1_count += 1,
             VoteOption::Option2 => option2_count += 1,
             VoteOption::Option3 => option3_count += 1,
