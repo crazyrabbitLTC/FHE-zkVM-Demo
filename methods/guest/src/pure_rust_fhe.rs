@@ -2,6 +2,7 @@
 // This provides the same API as Sunscreen but works in RISC Zero zkVM
 
 use serde::{Serialize, Deserialize};
+use rand::Rng;
 
 // Basic modular arithmetic parameters for a toy BFV scheme
 const PLAINTEXT_MODULUS: u64 = 1024; // Small for demo
@@ -113,17 +114,19 @@ impl PureRustFheRuntime {
     
     pub fn encrypt(&self, plaintext: Signed, _public_key: &PublicKey) -> Result<Cipher<Signed>, String> {
         // Real BFV: m + e + a*s where m=plaintext, e=error, a=random, s=secret
-        // Simplified: encode plaintext with deterministic "noise"
+        // SECURITY FIX: Use cryptographically secure random noise generation
         
         let plaintext_val = (plaintext.val as u64) % PLAINTEXT_MODULUS;
         let mut ciphertext_data = [0u64; POLYNOMIAL_DEGREE * 2];
         
-        // Simple encoding: place plaintext in first coefficient, add "noise" to others
+        // Embed plaintext in first coefficient
         ciphertext_data[0] = plaintext_val;
-        let mut noise = self.noise_seed;
+        
+        // CRITICAL FIX: Use secure random number generator for noise
+        // This replaces the deterministic noise that was a major security vulnerability
+        let mut rng = rand::thread_rng();
         for i in 1..POLYNOMIAL_DEGREE * 2 {
-            noise = noise.wrapping_mul(1103515245).wrapping_add(12345);
-            ciphertext_data[i] = noise % CIPHERTEXT_MODULUS;
+            ciphertext_data[i] = rng.gen_range(0..CIPHERTEXT_MODULUS);
         }
         
         Ok(Cipher {

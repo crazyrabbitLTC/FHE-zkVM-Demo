@@ -2,6 +2,7 @@
 // This performs actual FHE encryption that the client would do
 
 use serde::{Serialize, Deserialize};
+use rand::Rng;
 
 // Copy the pure Rust FHE implementation for client-side encryption
 const PLAINTEXT_MODULUS: u64 = 1024;
@@ -122,11 +123,11 @@ impl PureRustFheRuntime {
         // Real BFV-style encryption: place plaintext in first coefficient with noise
         ciphertext_data[0] = plaintext_val;
         
-        // Add deterministic noise based on plaintext (for reproducible demo)
-        let mut noise = self.noise_seed.wrapping_add(plaintext_val);
+        // SECURITY FIX: Use cryptographically secure random noise generation
+        // This replaces deterministic noise that was a security vulnerability
+        let mut rng = rand::thread_rng();
         for i in 1..POLYNOMIAL_DEGREE * 2 {
-            noise = noise.wrapping_mul(1103515245).wrapping_add(12345);
-            ciphertext_data[i] = noise % CIPHERTEXT_MODULUS;
+            ciphertext_data[i] = rng.gen_range(0..CIPHERTEXT_MODULUS);
         }
         
         Ok(Cipher {
