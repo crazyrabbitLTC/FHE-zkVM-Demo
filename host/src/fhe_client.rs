@@ -103,14 +103,16 @@ impl PureRustFheRuntime {
     }
     
     pub fn generate_keys(&mut self) -> (PublicKey, PrivateKey) {
+        // SECURITY FIX: Use cryptographically secure key generation
         let mut secret_data = [0u64; POLYNOMIAL_DEGREE];
         let mut key_data = [0u64; POLYNOMIAL_DEGREE];
         
-        let mut seed = self.noise_seed;
+        // CRITICAL FIX: Use cryptographically secure random number generator
+        // This replaces the predictable PRNG that was a major security vulnerability
+        let mut rng = rand::thread_rng();
         for i in 0..POLYNOMIAL_DEGREE {
-            seed = seed.wrapping_mul(1103515245).wrapping_add(12345);
-            secret_data[i] = seed % PLAINTEXT_MODULUS;
-            key_data[i] = seed % CIPHERTEXT_MODULUS;
+            secret_data[i] = rng.gen_range(0..PLAINTEXT_MODULUS);
+            key_data[i] = rng.gen_range(0..CIPHERTEXT_MODULUS);
         }
         
         (PublicKey { key_data }, PrivateKey { secret_data })
