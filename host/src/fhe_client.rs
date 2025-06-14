@@ -3,11 +3,22 @@
 
 use serde::{Serialize, Deserialize};
 use rand::Rng;
+use thiserror::Error;
 
 // Copy the pure Rust FHE implementation for client-side encryption
 const PLAINTEXT_MODULUS: u64 = 1024;
 const CIPHERTEXT_MODULUS: u64 = 1099511627776; // 2^40
 const POLYNOMIAL_DEGREE: usize = 8;
+
+#[derive(Error, Debug)]
+pub enum FheClientError {
+    #[error("Encryption failed: {reason}")]
+    EncryptionFailed { reason: String },
+    #[error("Key generation failed: {reason}")]
+    KeyGenerationFailed { reason: String },
+    #[error("Invalid vote option: {option}")]
+    InvalidVoteOption { option: u8 },
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Signed {
@@ -63,7 +74,7 @@ impl FheClient {
     }
     
     // REAL FHE ENCRYPTION - no simulation!
-    pub fn encrypt_vote_vector(&self, vote_choice: crate::types::VoteOption) -> Vec<Vec<u8>> {
+    pub fn encrypt_vote_vector(&self, vote_choice: crate::types::VoteOption) -> Result<Vec<Vec<u8>>, FheClientError> {
         println!("🔐 [FHE Client] Performing REAL FHE encryption of vote vector");
         
         let mut encrypted_vector = Vec::new();
@@ -76,14 +87,15 @@ impl FheClient {
             
             // REAL FHE ENCRYPTION
             let plaintext = Signed::from(vote_value);
-            let ciphertext = self.runtime.encrypt(plaintext, &self.public_key).unwrap();
+            let ciphertext = self.runtime.encrypt(plaintext, &self.public_key)
+                .map_err(|e| FheClientError::EncryptionFailed { reason: e })?;
             let serialized = ciphertext.serialize();
             
             encrypted_vector.push(serialized);
         }
         
         println!("✅ [FHE Client] Vote vector encrypted with real FHE");
-        encrypted_vector
+        Ok(encrypted_vector)
     }
     
     pub fn get_public_key(&self) -> &PublicKey {

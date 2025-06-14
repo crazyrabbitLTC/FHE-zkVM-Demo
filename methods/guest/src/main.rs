@@ -40,9 +40,12 @@ fn tally_encrypted_votes_with_fhe(input: VoteTallyInput) -> VoteTallyOutput {
     
     // Initialize encrypted tallies as actual FHE ciphertexts of zero
     let zero_plaintext = Signed::from(0);
-    let mut tally_option1 = fhe_runtime.encrypt(zero_plaintext, &public_key).unwrap();
-    let mut tally_option2 = fhe_runtime.encrypt(zero_plaintext, &public_key).unwrap();
-    let mut tally_option3 = fhe_runtime.encrypt(zero_plaintext, &public_key).unwrap();
+    let mut tally_option1 = fhe_runtime.encrypt(zero_plaintext, &public_key)
+        .expect("Failed to encrypt initial tally for option1");
+    let mut tally_option2 = fhe_runtime.encrypt(zero_plaintext, &public_key)
+        .expect("Failed to encrypt initial tally for option2");
+    let mut tally_option3 = fhe_runtime.encrypt(zero_plaintext, &public_key)
+        .expect("Failed to encrypt initial tally for option3");
     
     eprintln!("📊 [zkVM Guest] Performing REAL homomorphic addition on encrypted votes...");
     
@@ -65,7 +68,8 @@ fn tally_encrypted_votes_with_fhe(input: VoteTallyInput) -> VoteTallyOutput {
         // Convert each element of the vote vector to FHE ciphertext and add to tallies
         for (candidate_idx, encrypted_value_bytes) in encrypted_vote.encrypted_vote_vector.iter().enumerate() {
             // REAL FHE DESERIALIZATION: Convert client-encrypted ciphertext to our format
-            let encrypted_vote_cipher = fhe_runtime.deserialize_ciphertext(encrypted_value_bytes).unwrap();
+            let encrypted_vote_cipher = fhe_runtime.deserialize_ciphertext(encrypted_value_bytes)
+                .expect("Failed to deserialize encrypted vote");
             
             match candidate_idx {
                 0 => {
@@ -88,9 +92,12 @@ fn tally_encrypted_votes_with_fhe(input: VoteTallyInput) -> VoteTallyOutput {
     eprintln!("🔓 [zkVM Guest] Decrypting final FHE tallies with private key...");
     
     // REAL FHE decryption (only possible with private key inside secure zkVM)
-    let option1_plaintext = fhe_runtime.decrypt(&tally_option1, &private_key).unwrap();
-    let option2_plaintext = fhe_runtime.decrypt(&tally_option2, &private_key).unwrap();
-    let option3_plaintext = fhe_runtime.decrypt(&tally_option3, &private_key).unwrap();
+    let option1_plaintext = fhe_runtime.decrypt(&tally_option1, &private_key)
+        .expect("Failed to decrypt option1 tally");
+    let option2_plaintext = fhe_runtime.decrypt(&tally_option2, &private_key)
+        .expect("Failed to decrypt option2 tally");
+    let option3_plaintext = fhe_runtime.decrypt(&tally_option3, &private_key)
+        .expect("Failed to decrypt option3 tally");
     
     let option1_count = option1_plaintext.val as u32;
     let option2_count = option2_plaintext.val as u32;

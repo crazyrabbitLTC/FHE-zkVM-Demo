@@ -97,7 +97,8 @@ fn create_test_votes() -> VoteTallyInput {
         // REAL FHE ENCRYPTION: No simulation!
         // Each client encrypts their vote vector with real FHE
         println!("🗳️ [Host] {} is encrypting their vote with real FHE...", name);
-        let encrypted_vote_vector = fhe_client.encrypt_vote_vector(option);
+        let encrypted_vote_vector = fhe_client.encrypt_vote_vector(option)
+            .expect("Failed to encrypt vote vector");
         
         EncryptedVote {
             voter_address,

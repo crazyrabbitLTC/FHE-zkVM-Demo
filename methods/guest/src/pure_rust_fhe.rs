@@ -3,11 +3,26 @@
 
 use serde::{Serialize, Deserialize};
 use rand::Rng;
+use thiserror::Error;
 
 // Basic modular arithmetic parameters for a toy BFV scheme
 const PLAINTEXT_MODULUS: u64 = 1024; // Small for demo
 const CIPHERTEXT_MODULUS: u64 = 1099511627776; // 2^40 for demo
 const POLYNOMIAL_DEGREE: usize = 8; // Very small for demo
+
+#[derive(Error, Debug)]
+pub enum FheError {
+    #[error("Invalid ciphertext length: expected {expected}, got {actual}")]
+    InvalidCiphertextLength { expected: usize, actual: usize },
+    #[error("Invalid byte slice conversion")]
+    InvalidByteSlice,
+    #[error("Encryption failed: {reason}")]
+    EncryptionFailed { reason: String },
+    #[error("Decryption failed: {reason}")]
+    DecryptionFailed { reason: String },
+    #[error("Key generation failed: {reason}")]
+    KeyGenerationFailed { reason: String },
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Signed {
@@ -112,7 +127,7 @@ impl PureRustFheRuntime {
         (public_key, private_key)
     }
     
-    pub fn encrypt(&self, plaintext: Signed, _public_key: &PublicKey) -> Result<Cipher<Signed>, String> {
+    pub fn encrypt(&self, plaintext: Signed, _public_key: &PublicKey) -> Result<Cipher<Signed>, FheError> {
         // Real BFV: m + e + a*s where m=plaintext, e=error, a=random, s=secret
         // SECURITY FIX: Use cryptographically secure random noise generation
         
@@ -135,7 +150,7 @@ impl PureRustFheRuntime {
         })
     }
     
-    pub fn decrypt(&self, ciphertext: &Cipher<Signed>, _private_key: &PrivateKey) -> Result<Signed, String> {
+    pub fn decrypt(&self, ciphertext: &Cipher<Signed>, _private_key: &PrivateKey) -> Result<Signed, FheError> {
         // Real BFV: polynomial operations to recover m from (c0, c1) and secret s
         // Simplified: extract plaintext from first coefficient
         
@@ -143,16 +158,20 @@ impl PureRustFheRuntime {
         Ok(Signed::from(decrypted_val))
     }
     
-    pub fn deserialize_ciphertext(&self, data: &[u8]) -> Result<Cipher<Signed>, String> {
-        if data.len() != POLYNOMIAL_DEGREE * 2 * 8 {
-            return Err("Invalid ciphertext length".to_string());
+    pub fn deserialize_ciphertext(&self, data: &[u8]) -> Result<Cipher<Signed>, FheError> {
+        let expected_len = POLYNOMIAL_DEGREE * 2 * 8;
+        if data.len() != expected_len {
+            return Err(FheError::InvalidCiphertextLength {
+                expected: expected_len,
+                actual: data.len(),
+            });
         }
         
         let mut ciphertext_data = [0u64; POLYNOMIAL_DEGREE * 2];
         for i in 0..POLYNOMIAL_DEGREE * 2 {
             let start = i * 8;
             let end = start + 8;
-            let bytes: [u8; 8] = data[start..end].try_into().map_err(|_| "Invalid byte slice")?;
+            let bytes: [u8; 8] = data[start..end].try_into().map_err(|_| FheError::InvalidByteSlice)?;
             ciphertext_data[i] = u64::from_le_bytes(bytes);
         }
         
@@ -169,7 +188,7 @@ pub fn homomorphic_add(
     current_tally: Cipher<Signed>,
     vote: Cipher<Signed>,
     _public_key: &PublicKey,
-) -> Result<Vec<Cipher<Signed>>, String> {
+) -> Result<Vec<Cipher<Signed>>, FheError> {
     // Real BFV: Use relinearization and modulus switching for efficiency
     // Simplified: Direct addition (matches the add_vote FHE program)
     let result = current_tally + vote;
@@ -181,7 +200,7 @@ mod tests {
     use super::*;
     
     #[test]
-    fn test_basic_fhe_operations() {
+    fn test_basic_fhe_operations() -> Result<(), FheError> {
         let mut runtime = PureRustFheRuntime::new();
         let (public_key, private_key) = runtime.generate_keys();
         
@@ -189,30 +208,32 @@ mod tests {
         let plaintext1 = Signed::from(5);
         let plaintext2 = Signed::from(3);
         
-        let ciphertext1 = runtime.encrypt(plaintext1, &public_key).unwrap();
-        let ciphertext2 = runtime.encrypt(plaintext2, &public_key).unwrap();
+        let ciphertext1 = runtime.encrypt(plaintext1, &public_key)?;
+        let ciphertext2 = runtime.encrypt(plaintext2, &public_key)?;
         
         // Homomorphic addition
         let result_cipher = ciphertext1 + ciphertext2;
         
         // Decrypt and verify
-        let result_plain = runtime.decrypt(&result_cipher, &private_key).unwrap();
+        let result_plain = runtime.decrypt(&result_cipher, &private_key)?;
         assert_eq!(result_plain.val, 8); // 5 + 3 = 8
+        Ok(())
     }
     
     #[test]
-    fn test_serialization() {
+    fn test_serialization() -> Result<(), FheError> {
         let mut runtime = PureRustFheRuntime::new();
         let (public_key, _private_key) = runtime.generate_keys();
         
         let plaintext = Signed::from(42);
-        let ciphertext = runtime.encrypt(plaintext, &public_key).unwrap();
+        let ciphertext = runtime.encrypt(plaintext, &public_key)?;
         
         // Serialize and deserialize
         let serialized = ciphertext.serialize();
-        let deserialized = runtime.deserialize_ciphertext(&serialized).unwrap();
+        let deserialized = runtime.deserialize_ciphertext(&serialized)?;
         
         // Should be equal
         assert_eq!(ciphertext.ciphertext_data, deserialized.ciphertext_data);
+        Ok(())
     }
 }
