@@ -91,6 +91,14 @@ fn create_test_votes() -> VoteTallyInput {
     let fhe_client = FheClient::new();
     
     let encrypted_votes = voter_data.into_iter().map(|(name, option)| {
+        // Input validation
+        if name.is_empty() {
+            panic!("Invalid voter name: cannot be empty");
+        }
+        if name.len() > 50 {
+            panic!("Invalid voter name: too long ({}), max 50 characters", name.len());
+        }
+        
         let voter_address = generate_eth_address(name);
         let signature = create_signature(&voter_address, &option);
         

@@ -11,8 +11,15 @@ fn main() {
     eprintln!("🔒 [PRIVACY FIX] Rick Weber @ Sunscreen.tech feedback implemented:");
     eprintln!("🔒 [Server cannot see individual vote choices - only encrypted vectors]");
     
-    // Read input from the host
+    // Read input from the host with validation
     let input: VoteTallyInput = env::read();
+    
+    // Input validation to prevent DoS attacks
+    const MAX_VOTES: usize = 10000; // Reasonable limit for demo
+    if input.encrypted_votes.len() > MAX_VOTES {
+        panic!("DoS protection: Too many votes submitted ({}), maximum allowed: {}", 
+               input.encrypted_votes.len(), MAX_VOTES);
+    }
     
     eprintln!("📊 [zkVM Guest] Processing {} encrypted vote vectors", input.encrypted_votes.len());
     
@@ -60,8 +67,28 @@ fn tally_encrypted_votes_with_fhe(input: VoteTallyInput) -> VoteTallyOutput {
         // In real system, these would already be FHE ciphertexts
         // For now, we'll simulate by converting the "encrypted" data to FHE ciphertexts
         
-        if encrypted_vote.encrypted_vote_vector.len() != 3 {
-            eprintln!("    ❌ Invalid vote vector length");
+        // Validate vote vector structure
+        const EXPECTED_CANDIDATES: usize = 3;
+        const MAX_CIPHERTEXT_SIZE: usize = 1024; // Reasonable limit for each ciphertext
+        
+        if encrypted_vote.encrypted_vote_vector.len() != EXPECTED_CANDIDATES {
+            eprintln!("    ❌ Invalid vote vector length: expected {}, got {}", 
+                     EXPECTED_CANDIDATES, encrypted_vote.encrypted_vote_vector.len());
+            continue;
+        }
+        
+        // Validate each ciphertext size to prevent memory exhaustion
+        let mut valid_vote = true;
+        for (idx, ciphertext_bytes) in encrypted_vote.encrypted_vote_vector.iter().enumerate() {
+            if ciphertext_bytes.len() > MAX_CIPHERTEXT_SIZE {
+                eprintln!("    ❌ Ciphertext {} too large: {} bytes (max: {})", 
+                         idx, ciphertext_bytes.len(), MAX_CIPHERTEXT_SIZE);
+                valid_vote = false;
+                break;
+            }
+        }
+        
+        if !valid_vote {
             continue;
         }
         

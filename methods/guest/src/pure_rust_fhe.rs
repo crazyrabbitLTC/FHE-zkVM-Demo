@@ -78,7 +78,17 @@ impl std::ops::Add for Cipher<Signed> {
         // Simplified: element-wise addition mod ciphertext_modulus
         let mut result_data = [0u64; POLYNOMIAL_DEGREE * 2];
         for i in 0..POLYNOMIAL_DEGREE * 2 {
-            result_data[i] = (self.ciphertext_data[i] + other.ciphertext_data[i]) % CIPHERTEXT_MODULUS;
+            // Bounds checking: ensure no overflow even before modulus
+            let a = self.ciphertext_data[i];
+            let b = other.ciphertext_data[i];
+            
+            // Use checked arithmetic to prevent overflow
+            let sum = a.checked_add(b).unwrap_or_else(|| {
+                // If overflow would occur, use modular arithmetic
+                (a % CIPHERTEXT_MODULUS) + (b % CIPHERTEXT_MODULUS)
+            });
+            
+            result_data[i] = sum % CIPHERTEXT_MODULUS;
         }
         
         Cipher {
@@ -131,7 +141,22 @@ impl PureRustFheRuntime {
         // Real BFV: m + e + a*s where m=plaintext, e=error, a=random, s=secret
         // SECURITY FIX: Use cryptographically secure random noise generation
         
-        let plaintext_val = (plaintext.val as u64) % PLAINTEXT_MODULUS;
+        // Input validation and bounds checking
+        if plaintext.val < 0 {
+            return Err(FheError::EncryptionFailed { 
+                reason: format!("Negative plaintext values not supported: {}", plaintext.val) 
+            });
+        }
+        
+        // Convert to u64 with bounds checking
+        let plaintext_u64 = plaintext.val as u64;
+        if plaintext_u64 >= PLAINTEXT_MODULUS {
+            return Err(FheError::EncryptionFailed { 
+                reason: format!("Plaintext value {} exceeds modulus {}", plaintext_u64, PLAINTEXT_MODULUS) 
+            });
+        }
+        
+        let plaintext_val = plaintext_u64 % PLAINTEXT_MODULUS;
         let mut ciphertext_data = [0u64; POLYNOMIAL_DEGREE * 2];
         
         // Embed plaintext in first coefficient
