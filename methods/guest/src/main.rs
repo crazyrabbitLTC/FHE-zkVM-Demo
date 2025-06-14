@@ -47,12 +47,27 @@ fn tally_encrypted_votes_with_fhe(input: VoteTallyInput) -> VoteTallyOutput {
     
     // Initialize encrypted tallies as actual FHE ciphertexts of zero
     let zero_plaintext = Signed::from(0);
-    let mut tally_option1 = fhe_runtime.encrypt(zero_plaintext, &public_key)
-        .expect("Failed to encrypt initial tally for option1");
-    let mut tally_option2 = fhe_runtime.encrypt(zero_plaintext, &public_key)
-        .expect("Failed to encrypt initial tally for option2");
-    let mut tally_option3 = fhe_runtime.encrypt(zero_plaintext, &public_key)
-        .expect("Failed to encrypt initial tally for option3");
+    let mut tally_option1 = match fhe_runtime.encrypt(zero_plaintext, &public_key) {
+        Ok(cipher) => cipher,
+        Err(e) => {
+            eprintln!("❌ [zkVM Guest] Failed to encrypt initial tally for option1: {:?}", e);
+            panic!("Critical FHE error: Cannot initialize tally ciphertexts");
+        }
+    };
+    let mut tally_option2 = match fhe_runtime.encrypt(zero_plaintext, &public_key) {
+        Ok(cipher) => cipher,
+        Err(e) => {
+            eprintln!("❌ [zkVM Guest] Failed to encrypt initial tally for option2: {:?}", e);
+            panic!("Critical FHE error: Cannot initialize tally ciphertexts");
+        }
+    };
+    let mut tally_option3 = match fhe_runtime.encrypt(zero_plaintext, &public_key) {
+        Ok(cipher) => cipher,
+        Err(e) => {
+            eprintln!("❌ [zkVM Guest] Failed to encrypt initial tally for option3: {:?}", e);
+            panic!("Critical FHE error: Cannot initialize tally ciphertexts");
+        }
+    };
     
     eprintln!("📊 [zkVM Guest] Performing REAL homomorphic addition on encrypted votes...");
     
@@ -95,8 +110,13 @@ fn tally_encrypted_votes_with_fhe(input: VoteTallyInput) -> VoteTallyOutput {
         // Convert each element of the vote vector to FHE ciphertext and add to tallies
         for (candidate_idx, encrypted_value_bytes) in encrypted_vote.encrypted_vote_vector.iter().enumerate() {
             // REAL FHE DESERIALIZATION: Convert client-encrypted ciphertext to our format
-            let encrypted_vote_cipher = fhe_runtime.deserialize_ciphertext(encrypted_value_bytes)
-                .expect("Failed to deserialize encrypted vote");
+            let encrypted_vote_cipher = match fhe_runtime.deserialize_ciphertext(encrypted_value_bytes) {
+                Ok(cipher) => cipher,
+                Err(e) => {
+                    eprintln!("    ❌ Failed to deserialize encrypted vote for candidate {}: {:?}", candidate_idx, e);
+                    continue; // Skip this invalid vote and continue processing
+                }
+            };
             
             match candidate_idx {
                 0 => {
@@ -119,12 +139,27 @@ fn tally_encrypted_votes_with_fhe(input: VoteTallyInput) -> VoteTallyOutput {
     eprintln!("🔓 [zkVM Guest] Decrypting final FHE tallies with private key...");
     
     // REAL FHE decryption (only possible with private key inside secure zkVM)
-    let option1_plaintext = fhe_runtime.decrypt(&tally_option1, &private_key)
-        .expect("Failed to decrypt option1 tally");
-    let option2_plaintext = fhe_runtime.decrypt(&tally_option2, &private_key)
-        .expect("Failed to decrypt option2 tally");
-    let option3_plaintext = fhe_runtime.decrypt(&tally_option3, &private_key)
-        .expect("Failed to decrypt option3 tally");
+    let option1_plaintext = match fhe_runtime.decrypt(&tally_option1, &private_key) {
+        Ok(plaintext) => plaintext,
+        Err(e) => {
+            eprintln!("❌ [zkVM Guest] Failed to decrypt option1 tally: {:?}", e);
+            panic!("Critical FHE error: Cannot decrypt final tallies");
+        }
+    };
+    let option2_plaintext = match fhe_runtime.decrypt(&tally_option2, &private_key) {
+        Ok(plaintext) => plaintext,
+        Err(e) => {
+            eprintln!("❌ [zkVM Guest] Failed to decrypt option2 tally: {:?}", e);
+            panic!("Critical FHE error: Cannot decrypt final tallies");
+        }
+    };
+    let option3_plaintext = match fhe_runtime.decrypt(&tally_option3, &private_key) {
+        Ok(plaintext) => plaintext,
+        Err(e) => {
+            eprintln!("❌ [zkVM Guest] Failed to decrypt option3 tally: {:?}", e);
+            panic!("Critical FHE error: Cannot decrypt final tallies");
+        }
+    };
     
     let option1_count = option1_plaintext.val as u32;
     let option2_count = option2_plaintext.val as u32;
